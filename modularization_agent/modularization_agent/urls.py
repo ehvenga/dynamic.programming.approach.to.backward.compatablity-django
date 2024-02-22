@@ -16,7 +16,9 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from views import view_parameter_hierarchy
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('parameterhierarchy/', view_parameter_hierarchy, name='view_parameter_hierarchy'),
 ]

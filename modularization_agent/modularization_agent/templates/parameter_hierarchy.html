@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Parameter Hierarchy</title>
+  </head>
+  <body>
+    <h1>Parameter Hierarchy Data</h1>
+    <table border="1">
+      <tr>
+        <!-- Adjust these headers based on the actual columns of your table -->
+        <th>ID</th>
+        <th>Name</th>
+        <th>Parent</th>
+        <!-- Add more headers as needed -->
+      </tr>
+      {% for item in data %}
+      <tr>
+        <td>{{ item.id }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.parent }}</td>
+        <!-- Add more data fields as needed -->
+      </tr>
+      {% endfor %}
+    </table>
+  </body>
+</html>
