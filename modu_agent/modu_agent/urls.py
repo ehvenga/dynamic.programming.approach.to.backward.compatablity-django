@@ -1,5 +1,5 @@
 """
-URL configuration for modularization_agent project.
+URL configuration for modu_agent project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.0/topics/http/urls/
@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from views import view_parameter_hierarchy
+from .views import view_parameter_hierarchy
 
 urlpatterns = [
     path('admin/', admin.site.urls),
