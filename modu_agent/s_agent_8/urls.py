@@ -1,5 +1,3 @@
-# agent_1/urls.py
-
 from django.urls import path
 from .views import WebserviceDetailView, WebserviceListView
 
