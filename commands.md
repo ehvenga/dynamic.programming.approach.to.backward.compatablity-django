@@ -11,3 +11,10 @@ python manage.py migrate
 ```shell
 pip freeze > requirements.txt
 ```
+
+## Run Server
+
+```shell
+python manage.py runserver
+
+```

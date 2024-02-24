@@ -1,5 +1,5 @@
 """
-ASGI config for modularization_agent project.
+ASGI config for modu_agent project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'modularization_agent.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'modu_agent.settings')
 
 application = get_asgi_application()
