@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import WebserviceDetailView, WebserviceListView, InputparameterDetailView, OutputparameterDetailView, ParameterlistDetailView
-from .views import (WebserviceDetailAPI, WebserviceListAPI, InputparameterDetailAPI, OutputparameterDetailAPI, ParameterlistDetailAPI)
+from .views import WebserviceDetailView, WebserviceListView, InputparameterDetailView, OutputparameterDetailView, ParameterlistDetailView, parameters_dropdown_view
+from .views import (WebserviceDetailAPI, WebserviceListAPI, InputparameterDetailAPI, OutputparameterDetailAPI, ParameterlistDetailAPI, ParametersListAPI, GenerateParametersAPI)
 
 
 urlpatterns = [
@@ -14,4 +14,7 @@ urlpatterns = [
     path('api/inputparam/<str:webserviceId>/', InputparameterDetailAPI.as_view(), name='inputparameter-detail-api'),
     path('api/outputparam/<str:webserviceId>/', OutputparameterDetailAPI.as_view(), name='outputparameter-detail-api'),
     path('api/param/<str:parameterId>/', ParameterlistDetailAPI.as_view(), name='parameterlist-detail-api'),
+    path('api/parameters/', ParametersListAPI.as_view(), name='parameters_api'),
+    path('api/generate-parameters/', GenerateParametersAPI.as_view(), name='generate_parameters_api'),
+    path('s_agent_8/', parameters_dropdown_view, name='parameters-dropdown'),
 ]

@@ -26,3 +26,7 @@ class ParameterlistSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parameterlist
         fields = '__all__'
+
+class GenerateParametersSerializer(serializers.Serializer):
+    initialParameter = serializers.CharField(max_length=10)
+    goalParameter = serializers.CharField(max_length=10)

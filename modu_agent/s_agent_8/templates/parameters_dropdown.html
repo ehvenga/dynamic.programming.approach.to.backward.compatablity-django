@@ -1,0 +1,34 @@
+<!-- templates/s_agent_8/parameters_dropdown.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Parameters Dropdown</title>
+  </head>
+  <body>
+    <h2>Select Parameters</h2>
+
+    <form>
+      <label for="inputParameter">Input Parameter:</label>
+      <select name="inputParameter" id="inputParameter">
+        {% for parameter in input_parameters %}
+        <!-- Adjust 'parametername' if your model uses a different field -->
+        <option value="{{ parameter.id }}">
+          {{ parameter.parametername }}
+        </option>
+        {% endfor %}
+      </select>
+
+      <label for="initialGoalParameter">Initial Goal Parameter:</label>
+      <select name="initialGoalParameter" id="initialGoalParameter">
+        {% for parameter in initial_goal_parameters %}
+        <!-- This assumes you have a similar field in Initialgoalparameter to display -->
+        <option value="{{ parameter.id }}">
+          {{ parameter.parametername }}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+  </body>
+</html>
