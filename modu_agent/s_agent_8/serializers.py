@@ -30,3 +30,7 @@ class ParameterlistSerializer(serializers.ModelSerializer):
 class GenerateParametersSerializer(serializers.Serializer):
     initialParameter = serializers.CharField(max_length=10)
     goalParameter = serializers.CharField(max_length=10)
+
+class WebServiceChainSerializer(serializers.Serializer):
+    initialParameter = serializers.CharField(max_length=10)
+    goalParameter = serializers.CharField(max_length=10)

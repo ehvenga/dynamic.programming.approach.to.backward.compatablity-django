@@ -6,8 +6,9 @@ from django.http import JsonResponse
 from django.forms.models import model_to_dict
 from rest_framework import status
 from django.core import serializers
+from collections import deque
 from .models import Webservicelist, Inputparameter, Outputparameter, Parameterlist, Initialgoalparameter, Parameterhierarchy
-from .serializers import WebservicelistSerializer, WebserviceslistSerializer, InputparameterSerializer, OutputparameterSerializer, ParameterlistSerializer, GenerateParametersSerializer
+from .serializers import WebservicelistSerializer, WebserviceslistSerializer, InputparameterSerializer, OutputparameterSerializer, ParameterlistSerializer, GenerateParametersSerializer,WebServiceChainSerializer
 
 # Create your views here.
 
@@ -131,3 +132,152 @@ class GenerateParametersAPI(APIView):
                 return Response({'error': 'No path found from initial to goal parameter.'}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+def find_web_service_chain(initial_parameter, goal_parameter, path=[]):
+    # Find web services that produce the initial parameter as an output
+    initial_services = Outputparameter.objects.filter(parameterid=initial_parameter)
+    
+    for service in initial_services:
+        # Avoid cycles
+        if service.webserviceid in [p['id'] for p in path]:
+            continue
+        
+        # If the current service's output is the goal, return the path
+        if goal_parameter in Outputparameter.objects.filter(webserviceid=service.webserviceid).values_list('parameterid', flat=True):
+            return path + [{'id': service.webserviceid, 'name': Webservicelist.objects.get(webserviceid=service.webserviceid).webservicename}]
+        
+        # Otherwise, continue searching through services that take the current service's output as their input
+        next_services = Inputparameter.objects.filter(parameterid=service.parameterid).exclude(webserviceid=service.webserviceid)
+        
+        for next_service in next_services:
+            new_path = find_web_service_chain(next_service.parameterid, goal_parameter, path + [{'id': service.webserviceid, 'name': Webservicelist.objects.get(webserviceid=service.webserviceid).webservicename}])
+            if new_path:
+                return new_path
+
+    return []
+
+# class FindWebServicesAPI(APIView):
+#     def post(self, request):
+#         serializer = WebServiceChainSerializer(data=request.data)
+
+#         if serializer.is_valid():
+#             initial_parameter = serializer.validated_data['initialParameter']
+#             goal_parameter = serializer.validated_data['goalParameter']
+
+#             web_service_chain = find_web_service_chain(initial_parameter, goal_parameter)
+
+#             if web_service_chain:
+#                 return Response({'webServiceChain': web_service_chain})
+#             else:
+#                 return Response({'error': 'No chain found connecting initial to goal parameter.'}, status=404)
+
+#         return Response(serializer.errors, status=400)
+    
+def find_web_service_chain_bfs(initial_parameter, goal_parameter):
+    # Queue for BFS, each element is a tuple (current_parameter, path)
+    queue = deque([(initial_parameter, [])])
+    
+    # Set to keep track of visited parameters to avoid cycles
+    visited = set()
+
+    while queue:
+        current_parameter, path = queue.popleft()
+
+        # Check if we've already visited this parameter
+        if current_parameter in visited:
+            continue
+        visited.add(current_parameter)
+
+        # Find web services that produce the current parameter as an output
+        producing_services = Outputparameter.objects.filter(parameterid=current_parameter)
+
+        for service in producing_services:
+            service_id = service.webserviceid
+            service_name = Webservicelist.objects.get(webserviceid=service_id).webservicename
+
+            # Construct the new path including the current web service
+            new_path = path + [{'id': service_id, 'name': service_name}]
+
+            # Check if any of the outputs of the current service is the goal parameter
+            if goal_parameter in Outputparameter.objects.filter(webserviceid=service_id).values_list('parameterid', flat=True):
+                return new_path
+
+            # Otherwise, enqueue the next parameters to be processed
+            next_parameters = Inputparameter.objects.filter(webserviceid=service_id).values_list('parameterid', flat=True)
+            for next_param in next_parameters:
+                if next_param not in visited:
+                    queue.append((next_param, new_path))
+
+    # Return an empty list if no path is found
+    return []
+
+def find_web_service_chain(initial_parameter, goal_parameter):
+    # Initialize the queue with the initial parameter and an empty path
+    queue = deque([({'parameter': initial_parameter, 'path': []})])
+
+    while queue:
+        current = queue.popleft()
+        current_parameter = current['parameter']
+        current_path = current['path']
+
+        # Termination condition: if the current parameter is the goal
+        if current_parameter == goal_parameter:
+            return current_path
+
+        # Find all web services that take the current parameter as input
+        services_as_input = Inputparameter.objects.filter(parameterid=current_parameter)
+
+        for service in services_as_input:
+            service_id = service.webserviceid
+
+            # For each service, find its outputs
+            outputs = Outputparameter.objects.filter(webserviceid=service_id)
+
+            for output in outputs:
+                next_parameter = output.parameterid
+
+                # Build the new path including the current web service
+                next_path = current_path + [service_id]
+
+                # Add the next parameter and path to the queue
+                queue.append({'parameter': next_parameter, 'path': next_path})
+
+    # Return an empty list if no path is found
+    return []
+
+# class FindWebServicesAPI(APIView):
+#     def post(self, request):
+#         serializer = WebServiceChainSerializer(data=request.data)
+
+#         if serializer.is_valid():
+#             initial_parameter = serializer.validated_data['initialParameter']
+#             goal_parameter = serializer.validated_data['goalParameter']
+
+#             web_service_chain = find_web_service_chain_bfs(initial_parameter, goal_parameter)
+
+#             if web_service_chain:
+#                 return Response({'webServiceChain': web_service_chain})
+#             else:
+#                 return Response({'error': 'No chain found connecting initial to goal parameter.'}, status=404)
+
+#         return Response(serializer.errors, status=400)
+    
+class FindWebServicesAPI(APIView):
+    def post(self, request):
+        serializer = WebServiceChainSerializer(data=request.data)
+
+        if serializer.is_valid():
+            initial_parameter = serializer.validated_data['initialParameter']
+            goal_parameter = serializer.validated_data['goalParameter']
+
+            web_service_chain = find_web_service_chain(initial_parameter, goal_parameter)
+
+            if web_service_chain:
+                # Optionally, retrieve the names of the web services in the chain
+                web_services_names = [Webservicelist.objects.get(webserviceid=ws_id).webservicename for ws_id in web_service_chain]
+                return Response({'webServiceChain': web_services_names})
+            else:
+                return Response({'error': 'No chain found connecting initial to goal parameter.'}, status=404)
+
+        return Response(serializer.errors, status=400)
+
