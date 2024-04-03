@@ -34,3 +34,12 @@ class GenerateParametersSerializer(serializers.Serializer):
 class WebServiceChainSerializer(serializers.Serializer):
     initialParameter = serializers.CharField(max_length=10)
     goalParameter = serializers.CharField(max_length=10)
+
+class WebServiceChainV2Serializer(serializers.Serializer):
+    initialParameters = serializers.ListField(child=serializers.CharField(max_length=10))
+    goalParameters = serializers.ListField(child=serializers.CharField(max_length=10))
+
+class WebServicePathSerializer(serializers.Serializer):
+    initialParameters = serializers.ListField(child=serializers.CharField(max_length=10))
+    goalParameters = serializers.ListField(child=serializers.CharField(max_length=10))
+

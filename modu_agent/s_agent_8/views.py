@@ -9,6 +9,7 @@ from django.core import serializers
 from collections import deque
 from .models import Webservicelist, Inputparameter, Outputparameter, Parameterlist, Initialgoalparameter, Parameterhierarchy
 from .serializers import WebservicelistSerializer, WebserviceslistSerializer, InputparameterSerializer, OutputparameterSerializer, ParameterlistSerializer, GenerateParametersSerializer,WebServiceChainSerializer
+from .serializers import WebServiceChainV2Serializer, WebServicePathSerializer
 
 # Create your views here.
 
@@ -280,4 +281,141 @@ class FindWebServicesAPI(APIView):
                 return Response({'error': 'No chain found connecting initial to goal parameter.'}, status=404)
 
         return Response(serializer.errors, status=400)
+
+def find_web_service_chains(initial_parameters, goal_parameters):
+    chains = {}
+
+    for initial_param in initial_parameters:
+        for goal_param in goal_parameters:
+            # Initialize the queue with the initial parameter and an empty path
+            queue = deque([({'parameter': initial_param, 'path': []})])
+            while queue:
+                current = queue.popleft()
+                current_parameter = current['parameter']
+                current_path = current['path']
+
+                # Termination condition: if the current parameter is the goal
+                if current_parameter == goal_param:
+                    chains[(initial_param, goal_param)] = current_path
+                    break  # Move to the next parameter pair
+
+                # Find all web services that take the current parameter as input
+                services_as_input = Inputparameter.objects.filter(parameterid=current_parameter)
+                for service in services_as_input:
+                    service_id = service.webserviceid
+
+                    # For each service, find its outputs
+                    outputs = Outputparameter.objects.filter(webserviceid=service_id)
+                    for output in outputs:
+                        next_parameter = output.parameterid
+                        next_path = current_path + [service_id]
+
+                        # Add the next parameter and path to the queue
+                        queue.append({'parameter': next_parameter, 'path': next_path})
+
+    return chains
+
+class FindWebServicesV2API(APIView):
+    def post(self, request):
+        serializer = WebServiceChainV2Serializer(data=request.data)
+
+        if serializer.is_valid():
+            initial_parameters = serializer.validated_data['initialParameters']
+            goal_parameters = serializer.validated_data['goalParameters']
+
+            web_service_chains = find_web_service_chains(initial_parameters, goal_parameters)
+            response_data = {}
+
+            for (initial_param, goal_param), chain in web_service_chains.items():
+                # Optionally, retrieve the names of the web services in the chain
+                web_services_names = [Webservicelist.objects.get(webserviceid=ws_id).webservicename for ws_id in chain]
+                response_data[f'From {initial_param} to {goal_param}'] = web_services_names
+
+            return Response(response_data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+def construct_graph():
+    graph = {}
+    # Construct edges from output parameters to input parameters through web services
+    for output in Outputparameter.objects.all():
+        if output.parameterid not in graph:
+            graph[output.parameterid] = []
+        inputs = Inputparameter.objects.filter(webserviceid=output.webserviceid)
+        for input_param in inputs:
+            graph[output.parameterid].append((input_param.parameterid, output.webserviceid))
+    return graph
+
+def find_paths(graph, start, goals, path=[], paths=[]):
+    if start in goals:
+        paths.append(path)
+        return
+    if start not in graph:
+        return
+    for node, webservice in graph[start]:
+        if node not in path:  # Avoid cycles
+            find_paths(graph, node, goals, path + [(webservice, node)], paths)
+
+# class FindWebServicesPathsAPI(APIView):
+#     def post(self, request):
+#         serializer = WebServicePathSerializer(data=request.data)
+
+#         if serializer.is_valid():
+#             initial_parameters = set(serializer.validated_data['initialParameters'])
+#             goal_parameters = set(serializer.validated_data['goalParameters'])
+
+#             graph = construct_graph()
+#             all_paths = []
+
+#             for initial_param in initial_parameters:
+#                 paths = []
+#                 find_paths(graph, initial_param, goal_parameters, path=[initial_param], paths=paths)
+#                 all_paths.extend(paths)
+
+#             # Transform paths to include web service names
+#             named_paths = [
+#                 [{'webservice_id': webservice, 'webservice_name': Webservicelist.objects.get(webserviceid=webservice).webservicename, 'parameter': param} 
+#                  for webservice, param in path] for path in all_paths
+#             ]
+
+#             return Response({'paths': named_paths})
+
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+def find_paths_bfs(graph, starts, goals, max_depth=5):
+    queue = deque([([start], start) for start in starts])
+    paths = []
+
+    while queue:
+        path, current = queue.popleft()
+        if len(path) > max_depth:
+            continue
+        if current in goals:
+            paths.append(path)
+            continue
+        for next_param, webservice in graph.get(current, []):
+            if next_param not in path:  # Avoid cycles
+                queue.append((path + [(webservice, next_param)], next_param))
+    
+    return paths
+
+class FindWebServicesPathsAPI(APIView):
+    def post(self, request):
+        serializer = WebServicePathSerializer(data=request.data)
+
+        if serializer.is_valid():
+            initial_parameters = serializer.validated_data['initialParameters']
+            goal_parameters = serializer.validated_data['goalParameters']
+
+            graph = construct_graph()
+            paths = find_paths_bfs(graph, initial_parameters, goal_parameters)
+
+            named_paths = [
+                [{'webservice_id': webservice, 'webservice_name': Webservicelist.objects.get(webserviceid=webservice).webservicename, 'parameter': param} 
+                 for webservice, param in path] for path in paths
+            ]
+
+            return Response({'paths': named_paths})
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
