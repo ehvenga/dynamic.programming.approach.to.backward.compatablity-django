@@ -6,10 +6,10 @@ from django.http import JsonResponse
 from django.forms.models import model_to_dict
 from rest_framework import status
 from django.core import serializers
-from collections import deque
+from collections import deque, defaultdict
 from .models import Webservicelist, Inputparameter, Outputparameter, Parameterlist, Initialgoalparameter, Parameterhierarchy
 from .serializers import WebservicelistSerializer, WebserviceslistSerializer, InputparameterSerializer, OutputparameterSerializer, ParameterlistSerializer, GenerateParametersSerializer,WebServiceChainSerializer
-from .serializers import WebServiceChainV2Serializer, WebServicePathSerializer
+from .serializers import WebServiceChainV2Serializer, WebServicePathSerializer, WebServiceChainV2Serializer
 
 # Create your views here.
 
@@ -424,5 +424,95 @@ class FindWebServicesPathsAPI(APIView):
             return Response({'paths': named_paths})
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+def preprocess_webservices():
+    input_to_services = defaultdict(list)
+    output_to_services = defaultdict(list)
+    service_outputs = defaultdict(list)
+
+    for inp in Inputparameter.objects.all():
+        input_to_services[inp.parameterid].append(inp.webserviceid)
+
+    for outp in Outputparameter.objects.all():
+        output_to_services[outp.parameterid].append(outp.webserviceid)
+        service_outputs[outp.webserviceid].append(outp.parameterid)
+
+    return input_to_services, output_to_services, service_outputs
+
+def bfs_with_path_tracking(initial_parameters, goal_parameters, input_to_services, service_outputs):
+    queue = deque(initial_parameters)
+    paths = {param: [] for param in initial_parameters}  # Track paths
+    visited = set(initial_parameters)
+
+    while queue:
+        current_param = queue.popleft()
+
+        # If a goal parameter is reached, reconstruct and return the path
+        if current_param in goal_parameters:
+            return reconstruct_path(current_param, paths)
+
+        for service_id in input_to_services[current_param]:
+            for next_param in service_outputs[service_id]:
+                if next_param not in visited:
+                    queue.append(next_param)
+                    visited.add(next_param)
+                    paths[next_param] = paths[current_param] + [(service_id, next_param)]
+
+    return []  # Return an empty list if no path is found
+
+def reconstruct_path(param, paths):
+    return [(service, param) for service, param in paths[param]]
+
+
+def find_web_service_chains_v2(initial_parameters, goal_parameters):
+    all_chains = []
+
+    # Function to find a single chain, reused from the previous example
+    def find_chain(current_parameter, goal_parameter, current_path, visited):
+        if current_parameter in goal_parameters:
+            all_chains.append(current_path)
+            return True
+
+        visited.add(current_parameter)
+
+        services_as_input = Inputparameter.objects.filter(parameterid=current_parameter)
+        for service in services_as_input:
+            service_id = service.webserviceid
+            if service_id in visited:
+                continue
+
+            outputs = Outputparameter.objects.filter(webserviceid=service_id)
+            for output in outputs:
+                next_parameter = output.parameterid
+                if next_parameter not in visited:
+                    find_chain(next_parameter, goal_parameters, current_path + [service_id], visited.copy())
+
+    # Iterate over each initial parameter and attempt to find a chain to any goal parameter
+    for initial_param in initial_parameters:
+        find_chain(initial_param, goal_parameters, [], set())
+
+    return 
+
+class FindWebChainsV2API(APIView):
+    def post(self, request):
+        serializer = WebServiceChainV2Serializer(data=request.data)
+
+        if serializer.is_valid():
+            initial_parameters = set(serializer.validated_data['initialParameters'])
+            goal_parameters = set(serializer.validated_data['goalParameters'])
+
+            # Preprocess to create mappings
+            input_to_services, output_to_services, service_outputs = preprocess_webservices()
+
+            # Find web service chains for each initial parameter
+            chains = []
+            for initial_param in initial_parameters:
+                chain = bfs_with_path_tracking([initial_param], goal_parameters, input_to_services, service_outputs)
+                if chain:
+                    chains.append(chain)
+
+            return Response({'webServiceChains': chains})
+
+        return Response(serializer.errors, status=400)
 
 
