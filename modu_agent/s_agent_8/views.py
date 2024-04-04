@@ -383,21 +383,22 @@ def find_paths(graph, start, goals, path=[], paths=[]):
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 def find_paths_bfs(graph, starts, goals, max_depth=5):
-    queue = deque([([start], start) for start in starts])
+    queue = deque([([(None, start)], start) for start in starts])  # Initialize paths with (None, start) to indicate no preceding web service for the starting points
     paths = []
 
     while queue:
         path, current = queue.popleft()
-        if len(path) > max_depth:
+        if len(path) > max_depth + 1:  # +1 accounts for the initial (None, start) in each path
             continue
         if current in goals:
-            paths.append(path)
+            paths.append(path[1:])  # Skip the initial (None, start)
             continue
         for next_param, webservice in graph.get(current, []):
-            if next_param not in path:  # Avoid cycles
+            if next_param not in [p for _, p in path]:  # Check path for cycles based on parameters only
                 queue.append((path + [(webservice, next_param)], next_param))
     
     return paths
+
 
 class FindWebServicesPathsAPI(APIView):
     def post(self, request):
@@ -410,12 +411,18 @@ class FindWebServicesPathsAPI(APIView):
             graph = construct_graph()
             paths = find_paths_bfs(graph, initial_parameters, goal_parameters)
 
-            named_paths = [
-                [{'webservice_id': webservice, 'webservice_name': Webservicelist.objects.get(webserviceid=webservice).webservicename, 'parameter': param} 
-                 for webservice, param in path] for path in paths
-            ]
+            # Now properly unpack webservice and param from each step in the paths
+            named_paths = []
+            for path in paths:
+                named_path = []
+                for webservice_id, param in path:
+                    if webservice_id:  # Skip the initial step where webservice_id is None
+                        webservice_name = Webservicelist.objects.get(webserviceid=webservice_id).webservicename
+                        named_path.append({'webservice_id': webservice_id, 'webservice_name': webservice_name, 'parameter': param})
+                named_paths.append(named_path)
 
             return Response({'paths': named_paths})
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 

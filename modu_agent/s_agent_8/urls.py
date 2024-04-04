@@ -18,8 +18,8 @@ urlpatterns = [
     path('api/generate-parameters/', GenerateParametersAPI.as_view(), name='generate_parameters_api'),
     path('api/find-webservices/', FindWebServicesAPI.as_view(), name='find_web_services'),
 
-    path('api/find-webservices-v2/', FindWebServicesV2API.as_view(), name='find_web_services_v2'),
     path('api/find-webservices-paths/', FindWebServicesPathsAPI.as_view(), name='find_web_services_paths'),
+    path('api/find-webservices-v2/', FindWebServicesV2API.as_view(), name='find_web_services_v2'),
 
 
     path('s_agent_8/', parameters_dropdown_view, name='parameters-dropdown'),
