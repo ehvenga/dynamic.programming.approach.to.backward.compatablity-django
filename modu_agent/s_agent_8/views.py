@@ -7,6 +7,7 @@ from django.forms.models import model_to_dict
 from rest_framework import status
 from django.core import serializers
 from collections import deque, defaultdict
+from itertools import combinations
 from .models import Webservicelist, Inputparameter, Outputparameter, Parameterlist, Initialgoalparameter, Parameterhierarchy
 from .serializers import WebservicelistSerializer, WebserviceslistSerializer, InputparameterSerializer, OutputparameterSerializer, ParameterlistSerializer, GenerateParametersSerializer,WebServiceChainSerializer
 from .serializers import WebServiceChainV2Serializer, WebServicePathSerializer, WebServiceChainV2Serializer
@@ -515,4 +516,82 @@ class FindWebChainsV2API(APIView):
 
         return Response(serializer.errors, status=400)
 
+class FindWebChainsV3API(APIView):
+    def post(self, request):
+        serializer = WebServiceChainV2Serializer(data=request.data)
 
+        if serializer.is_valid():
+            initial_parameters = set(serializer.validated_data['initialParameters'])
+            goal_parameters = set(serializer.validated_data['goalParameters'])
+
+            # Build the graph
+            graph = self.build_graph(initial_parameters, goal_parameters)
+
+            # Find paths
+            stages = self.find_paths(graph, initial_parameters, goal_parameters)
+
+            return Response({"stages": stages}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def build_graph(self, initial_parameters, goal_parameters):
+        graph = defaultdict(lambda: {'inputs': set(), 'outputs': set()})
+
+        # Query for web services that are connected to the initial and goal parameters
+        input_services = Inputparameter.objects.filter(parameterid__in=initial_parameters)
+        output_services = Outputparameter.objects.filter(parameterid__in=goal_parameters)
+
+        for service in input_services:
+            graph[service.webserviceid]['inputs'].add(service.parameterid)
+
+        for service in output_services:
+            graph[service.webserviceid]['outputs'].add(service.parameterid)
+
+        # Query for connections between these services based on matching input and output parameters
+        for ws_id in graph.keys():
+            output_params = Outputparameter.objects.filter(webserviceid=ws_id)
+            for op in output_params:
+                connected_services = Inputparameter.objects.filter(parameterid=op.parameterid)
+                for cs in connected_services:
+                    graph[ws_id]['outputs'].add(cs.webserviceid)
+
+        return graph
+
+    def find_paths(self, graph, initial_parameters, goal_parameters):
+        # Initialize the queue with services that produce the initial parameters
+        queue = deque([([ws_id], ws_id) for ws_id, data in graph.items() if data['inputs'] & initial_parameters])
+
+        visited = set()
+        stages = []
+
+        while queue:
+            current_path, current_service = queue.popleft()
+
+            if current_service in visited:
+                continue
+            visited.add(current_service)
+
+            if graph[current_service]['outputs'] & goal_parameters:
+                stages.append(current_path)
+                continue
+
+            for next_service in graph[current_service]['outputs']:
+                if next_service not in current_path:
+                    new_path = list(current_path)
+                    new_path.append(next_service)
+                    queue.append((new_path, next_service))
+
+        # Organize stages to minimize the number of calls and parallelize where possible
+        return self.organize_stages(stages)
+
+    def organize_stages(self, stages):
+        # Convert paths to stages where each stage consists of parallelizable services
+        max_length = max(len(stage) for stage in stages)
+        organized_stages = [[] for _ in range(max_length)]
+
+        for stage in stages:
+            for i, service in enumerate(stage):
+                if service not in organized_stages[i]:
+                    organized_stages[i].append(service)
+
+        return organized_stages

@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import WebserviceDetailView, WebserviceListView, InputparameterDetailView, OutputparameterDetailView, ParameterlistDetailView, parameters_dropdown_view
 from .views import (WebserviceDetailAPI, WebserviceListAPI, InputparameterDetailAPI, OutputparameterDetailAPI, ParameterlistDetailAPI, ParametersListAPI, GenerateParametersAPI, FindWebServicesAPI)
-from .views import (FindWebServicesV2API, FindWebServicesPathsAPI, FindWebChainsV2API)
+from .views import (FindWebServicesV2API, FindWebServicesPathsAPI, FindWebChainsV2API, FindWebChainsV3API)
 
 urlpatterns = [
     path('webservice/<str:servicenumber>/', WebserviceDetailView.as_view(), name='webservice-detail'),
@@ -21,6 +21,8 @@ urlpatterns = [
     path('api/find-webservices-paths/', FindWebServicesPathsAPI.as_view(), name='find_web_services_paths'),
     path('api/find-webservices-v2/', FindWebServicesV2API.as_view(), name='find_web_services_v2'),
     path('api/find-webchains-v2/', FindWebChainsV2API.as_view(), name='find_web_chains_v2'),
+
+    path('api/find-webchains-v3/', FindWebChainsV3API.as_view(), name='find_web_chains_v3'),
 
 
 
